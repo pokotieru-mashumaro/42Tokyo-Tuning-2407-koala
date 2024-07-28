@@ -16,25 +16,6 @@ pub struct Edge {
     pub weight: i32,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-struct State {
-    cost: i32,
-    position: i32,
-}
-
-impl Ord for State {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Note that we flip the order here to get the smallest cost first in the `BinaryHeap`.
-        other.cost.cmp(&self.cost)
-    }
-}
-
-// `PartialOrd` needs to be implemented as well.
-impl PartialOrd for State {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
 
 #[derive(Debug)]
 pub struct Graph {
@@ -69,70 +50,6 @@ impl Graph {
             .entry(reverse_edge.node_a_id)
             .or_default()
             .push(reverse_edge);
-    }
-
-    pub fn shortest_path1(&self, from_node_id: i32, to_node_id: i32) -> i32 {
-        let mut distances = HashMap::new();
-        distances.insert(from_node_id, 0);
-
-        for _ in 0..self.nodes.len() {
-            for node_id in self.nodes.keys() {
-                if let Some(edges) = self.edges.get(node_id) {
-                    for edge in edges {
-                        let new_distance = distances
-                            .get(node_id)
-                            .and_then(|d: &i32| d.checked_add(edge.weight))
-                            .unwrap_or(i32::MAX);
-                        let current_distance = distances.get(&edge.node_b_id).unwrap_or(&i32::MAX);
-                        if new_distance < *current_distance {
-                            distances.insert(edge.node_b_id, new_distance);
-                        }
-                    }
-                }
-            }
-        }
-
-        distances.get(&to_node_id).cloned().unwrap_or(i32::MAX)
-    }
-
-    pub fn shortest_path_ori(&self, from_node_id: i32, to_node_id: i32) -> i32 {
-        if !self.nodes.contains_key(&from_node_id) || !self.nodes.contains_key(&to_node_id) {
-            return i32::MAX;
-        }
-
-        let mut distances = HashMap::new();
-        let mut heap = BinaryHeap::new();
-
-        distances.insert(from_node_id, 0);
-        heap.push(State {
-            cost: 0,
-            position: from_node_id,
-        });
-
-        while let Some(State { cost, position }) = heap.pop() {
-            if let Some(&current_cost) = distances.get(&position) {
-                if cost > current_cost {
-                    continue;
-                }
-            }
-
-            if let Some(edges) = self.edges.get(&position) {
-                for edge in edges {
-                    let next_cost = cost + edge.weight;
-                    let next_position = edge.node_b_id;
-
-                    if next_cost < *distances.get(&next_position).unwrap_or(&i32::MAX) {
-                        heap.push(State {
-                            cost: next_cost,
-                            position: next_position,
-                        });
-                        distances.insert(next_position, next_cost);
-                    }
-                }
-            }
-        }
-
-        distances.get(&to_node_id).cloned().unwrap_or(i32::MAX)
     }
 
     pub fn shortest_path(&self, from_node_id: i32, to_node_id: i32) -> i32 {
