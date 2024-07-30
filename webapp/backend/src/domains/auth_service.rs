@@ -42,6 +42,8 @@ impl<T: AuthRepository + std::fmt::Debug> AuthService<T> {
         AuthService { repository }
     }
 
+    //ユーザーの重複を見てないかも
+    //Insertで重複を見てるかをチェック
     pub async fn register_user(
         &self,
         username: &str,
@@ -49,22 +51,44 @@ impl<T: AuthRepository + std::fmt::Debug> AuthService<T> {
         role: &str,
         area: Option<i32>,
     ) -> Result<LoginResponseDto, AppError> {
+        /*
+        流れ：
+        1.role、areaのエラーハンドリング
+        2.find_user_by_username関数で謎ハンドリング
+        3.hashpassword作成
+        4.create_user関数でInsert(user作成)
+        5.sessiontoken作成
+        6.find_user_by_username関数で謎ハンドリング 以下はOKの時
+        7.create_session関数でInsert(session)
+        8.user.role.as_str() でmatch
+
+        dispatcherの場合
+        9.create_dispatcher関数でInsert(dispatcher作成)
+        10.find_dispatcher_by_user_idの結果をdispatcher変数に代入
+        11.LoginResponseDtoをreturn
+        それ以外の場合
+        9.LoginResponseDtoをreturn
+
+         */
         if role == "dispatcher" && area.is_none() {
             return Err(AppError::BadRequest);
         }
 
+        //返り値をBoolにすると速度アップ おそらく
         if (self.repository.find_user_by_username(username).await?).is_some() {
             return Err(AppError::Conflict);
         }
 
         let hashed_password = hash_password(password).unwrap();
 
+        //Insertだから代入なし ?演算子でエラーハンドリング
         self.repository
             .create_user(username, &hashed_password, role)
             .await?;
 
         let session_token = generate_session_token();
 
+        //なぜこのmatchがあるのか謎 InternalServerErrorとは この関数が重複 ただpoolに入れているため処理速度は大丈夫そう
         match self.repository.find_user_by_username(username).await? {
             Some(user) => {
                 self.repository
@@ -108,6 +132,19 @@ impl<T: AuthRepository + std::fmt::Debug> AuthService<T> {
         username: &str,
         password: &str,
     ) -> Result<LoginResponseDto, AppError> {
+        /*
+        流れ login
+        1.find_user_by_username関数でusernameをハンドリング 以下はOKの時
+        2.verify_password関数でpasswordのエラーハンドリング
+        3.session_token作成
+        4.user.role.as_str() でmatch
+
+        dispatcherの場合
+        5.find_dispatcher_by_user_idの結果をdispatcher変数に代入
+        6.LoginResponseDtoをreturn
+        それ以外の場合
+        5.LoginResponseDtoをreturn
+         */
         match self.repository.find_user_by_username(username).await? {
             Some(user) => {
                 let is_password_valid = verify_password(&user.password, password).unwrap();
